@@ -1,13 +1,5 @@
 import crypto from "crypto";
 
-/**
- * Génère une clé secrète aléatoire pour le chiffrement.
- * @returns Une chaîne hexadécimale de 64 caractères (32 octets)
- */
-export function generateSecretKey(): string {
-  return crypto.randomBytes(32).toString('hex');
-}
-
 // Configuration
 const algorithm: string = "aes-256-cbc";
 const ivLength: number = 16; // 16 octets pour AES

@@ -17,14 +17,14 @@ export async function GET(
   }
 
   const headersList = headers();
-  const accept = headersList.get("accept");
+  const accept = (await headersList).get("accept");
 
   if (accept === "text/event-stream") {
     const stream = new TransformStream();
     const writer = stream.writable.getWriter();
     const encoder = new TextEncoder();
 
-    const sendUpdate = async (data: any) => {
+    const sendUpdate = async (data: { type: string; current: number; total: number; success: number; failure: number }) => {
       await writer.write(
         encoder.encode(`data: ${JSON.stringify(data)}\n\n`)
       );

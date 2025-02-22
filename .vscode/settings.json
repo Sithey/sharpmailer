@@ -1,20 +1,20 @@
 {
   "files.exclude": {
-    ".vscode": false,
-    "node_modules": false,
-    ".next": false,
-    ".gitignore": false,
-    "eslint.config.mjs": false,
-    "next-env.d.ts": false,
-    "next.config.ts": false,
-    "package.json": false,
-    "pnpm-lock.yaml": false,
-    "postcss.config.mjs": false,
-    "README.md": false,
-    "tailwind.config.ts": false,
-    "tsconfig.json": false,
-    "src\\app\\globals.css": false,
-    "components.json": false,
-    ".env.local": false
+    ".vscode": true,
+    "node_modules": true,
+    ".next": true,
+    ".gitignore": true,
+    "eslint.config.mjs": true,
+    "next-env.d.ts": true,
+    "next.config.ts": true,
+    "package.json": true,
+    "pnpm-lock.yaml": true,
+    "postcss.config.mjs": true,
+    "README.md": true,
+    "tailwind.config.ts": true,
+    "tsconfig.json": true,
+    "src\\app\\globals.css": true,
+    "components.json": true,
+    ".env.local": true
   }
 }
