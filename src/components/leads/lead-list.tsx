@@ -10,9 +10,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Papa from 'papaparse';
 
-export default function LeadList({ user }: { user: User & { leads: Lead[], campaigns: Campaign[] } }) {
+export default function LeadList({ user }: { user: User & { leads: (Lead & { campaigns: Campaign[] })[], campaigns: Campaign[] } }) {
   const { id, leads: initialLeads, campaigns } = user;
-  const [leads, setLeads] = useState<Lead[]>(initialLeads);
+  const [leads, setLeads] = useState<(Lead & { campaigns: Campaign[] })[]>(initialLeads);
   const [isAdding, setIsAdding] = useState(false);
   const [variables, setVariables] = useState<Record<string, string>>({});
   const [newLead, setNewLead] = useState({
@@ -30,7 +30,7 @@ export default function LeadList({ user }: { user: User & { leads: Lead[], campa
   const refreshLeads = async () => {
     const result = await fetchLeads(id);
     if (result.success && result.leads) {
-      setLeads(result.leads);
+      setLeads(result.leads as (Lead & { campaigns: Campaign[] })[]);
     } else {
       toast({
         variant: "destructive",
@@ -95,13 +95,13 @@ export default function LeadList({ user }: { user: User & { leads: Lead[], campa
     const file = e.target.files?.[0];
     if (!file) return;
 
-    Papa.parse(file, {
+    Papa.parse<{ email: string }>(file, {
       header: true, // This will automatically use the first row as headers
       skipEmptyLines: 'greedy', // Skip empty lines and trim whitespace
       complete: async (results) => {
-        const leads = results.data
-          .filter((row: any) => row.email) // Ensure we have an email
-          .map((row: any) => {
+        const leads = (results.data as { email: string }[])
+          .filter((row) => row.email) // Ensure we have an email
+          .map((row) => {
             // Convert the row to our lead format
             const { email, ...variables } = row;
             return {
@@ -134,7 +134,7 @@ export default function LeadList({ user }: { user: User & { leads: Lead[], campa
           });
         }
       },
-      error: (error: any) => {
+      error: (error: Error) => {
         toast({
           variant: "destructive",
           title: "Error",
@@ -148,9 +148,9 @@ export default function LeadList({ user }: { user: User & { leads: Lead[], campa
     const lead = leads.find(l => l.id === leadId);
     if (!lead) return;
 
-    const currentCampaigns = lead.campaigns || [];
-    const newCampaignIds = currentCampaigns.map(c => c.id).includes(campaignId)
-      ? currentCampaigns.filter(c => c.id !== campaignId).map(c => c.id)
+    const currentCampaigns = lead.campaigns;
+    const newCampaignIds = currentCampaigns.some((campaign: Campaign) => campaign.id === campaignId)
+      ? currentCampaigns.filter((campaign: Campaign) => campaign.id !== campaignId).map(c => c.id)
       : [...currentCampaigns.map(c => c.id), campaignId];
 
     const result = await updateLeadCampaigns(leadId, newCampaignIds);
@@ -426,7 +426,7 @@ export default function LeadList({ user }: { user: User & { leads: Lead[], campa
                 <Label className="mb-2 block">Campaigns</Label>
                 <div className="flex flex-wrap gap-2">
                   {campaigns.map((campaign) => {
-                    const isSelected = lead.campaigns?.some(c => c.id === campaign.id);
+                    const isSelected = lead.campaigns?.some((c: Campaign) => c.id === campaign.id);
                     return (
                       <Button
                         key={campaign.id}

@@ -17,7 +17,11 @@ export default async function Home() {
     include: {
       templates: true,
       smtps: true,
-      campaigns: true
+      campaigns: {
+        include: {
+          leads: true
+        }
+      }
     }
   });
 
