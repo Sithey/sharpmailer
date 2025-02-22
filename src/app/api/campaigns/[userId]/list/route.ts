@@ -1,11 +1,10 @@
-import { NextResponse, NextRequest } from "next/server";
+import { NextResponse } from "next/server";
+import type { NextApiRequest } from 'next'
+
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
-export async function GET(
-  request: NextRequest,
-  context: { params: Record<string, string> }
-): Promise<NextResponse> {
+export async function GET(request: NextApiRequest): Promise<NextResponse> {
   try {
     const session = await auth();
 
@@ -16,7 +15,10 @@ export async function GET(
       );
     }
 
-    const { userId } = context.params;
+    let userId = request.query.userId as string;
+    if (Array.isArray(userId)) {
+      userId = userId[0];
+    }
 
     const campaigns = await prisma.campaign.findMany({
       where: { userId },
