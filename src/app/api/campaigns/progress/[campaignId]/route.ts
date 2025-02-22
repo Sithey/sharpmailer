@@ -5,8 +5,8 @@ import { headers } from "next/headers";
 
 export async function GET(
   request: Request,
-  { params }: { params: { campaignId: string } }
-) {
+  { params }: { params: Promise<{ campaignId: string }> }
+): Promise<NextResponse> {
   const session = await auth();
 
   if (!session?.user?.email) {
@@ -16,6 +16,7 @@ export async function GET(
     );
   }
 
+  // Récupération synchrone des headers via next/headers
   const headersList = headers();
   const accept = (await headersList).get("accept");
 
@@ -24,38 +25,47 @@ export async function GET(
     const writer = stream.writable.getWriter();
     const encoder = new TextEncoder();
 
-    const sendUpdate = async (data: { type: string; current: number; total: number; success: number; failure: number }) => {
-      await writer.write(
-        encoder.encode(`data: ${JSON.stringify(data)}\n\n`)
-      );
+    const sendUpdate = async (data: {
+      type: string;
+      current: number;
+      total: number;
+      success: number;
+      failure: number;
+    }) => {
+      await writer.write(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
     };
+
+    const { campaignId } = await params;
 
     const interval = setInterval(async () => {
       const [campaign, sendLogs] = await Promise.all([
         prisma.campaign.findUnique({
-          where: { id: params.campaignId },
-          select: { description: true }
+          where: { id: campaignId },
+          select: { description: true },
         }),
         prisma.campaignSendLog.groupBy({
-          by: ['success'],
-          where: { campaignId: params.campaignId },
-          _count: true
-        })
+          by: ["success"],
+          where: { campaignId },
+          _count: true,
+        }),
       ]);
 
       if (campaign?.description?.startsWith("Sending:")) {
         const [, progress] = campaign.description.split(": ");
-        const [current, total] = progress.split("/")[0].trim().split(" ")[0].split("/");
-        
+        // Correction de la décomposition de la chaîne pour obtenir current et total
+        const [currentStr, totalStr] = progress.split("/").map(s => s.trim());
+        const current = parseInt(currentStr);
+        const total = parseInt(totalStr);
+
         const successCount = sendLogs.find(log => log.success)?._count ?? 0;
         const failureCount = sendLogs.find(log => !log.success)?._count ?? 0;
 
         await sendUpdate({
           type: "progress",
-          current: parseInt(current),
-          total: parseInt(total),
+          current,
+          total,
           success: successCount,
-          failure: failureCount
+          failure: failureCount,
         });
       }
     }, 500);
@@ -65,34 +75,35 @@ export async function GET(
       writer.close();
     });
 
-    return new Response(stream.readable, {
+    return new NextResponse(stream.readable, {
       headers: {
         "Content-Type": "text/event-stream",
         "Cache-Control": "no-cache",
-        "Connection": "keep-alive"
-      }
+        "Connection": "keep-alive",
+      },
     });
   }
 
   // Pour les requêtes normales
+  const { campaignId } = await params;
   const [campaign, sendLogs] = await Promise.all([
     prisma.campaign.findUnique({
-      where: { id: params.campaignId },
-      select: { description: true }
+      where: { id: campaignId },
+      select: { description: true },
     }),
     prisma.campaignSendLog.groupBy({
-      by: ['success'],
-      where: { campaignId: params.campaignId },
-      _count: true
-    })
+      by: ["success"],
+      where: { campaignId },
+      _count: true,
+    }),
   ]);
 
-  return NextResponse.json({ 
-    success: true, 
+  return NextResponse.json({
+    success: true,
     campaign,
     stats: {
       success: sendLogs.find(log => log.success)?._count ?? 0,
-      failure: sendLogs.find(log => !log.success)?._count ?? 0
-    }
+      failure: sendLogs.find(log => !log.success)?._count ?? 0,
+    },
   });
 }
