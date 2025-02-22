@@ -2,15 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
-type RouteContext = {
-  params: {
-    userId: string
-  }
-}
-
 export async function GET(
   request: NextRequest,
-  { params }: RouteContext
+  context: { params: { userId: string } } 
 ) {
   try {
     const session = await auth();
@@ -24,16 +18,16 @@ export async function GET(
 
     const campaigns = await prisma.campaign.findMany({
       where: {
-        userId: params.userId,
+        userId: context.params.userId, 
       },
       include: {
         sendLogs: {
           orderBy: {
-            sentAt: 'desc'
-          }
+            sentAt: "desc",
+          },
         },
-        leads: true
-      }
+        leads: true,
+      },
     });
 
     return NextResponse.json({ success: true, campaigns });
