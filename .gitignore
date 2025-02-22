@@ -39,18 +39,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
-prisma/migrations/migration_lock.toml
-prisma/migrations/20250214144410_authjs/migration.sql
-prisma/migrations/20250214210119_added_variables_to_lead/migration.sql
-prisma/migrations/20250214210754_change/migration.sql
-prisma/migrations/20250214210828_change/migration.sql
-prisma/migrations/20250215095500_add/migration.sql
-prisma/migrations/20250222162512_add/migration.sql
-prisma/migrations/20250222170428_add/migration.sql
-prisma/migrations/20250222172524_add_campaign_send_logs/migration.sql
-prisma/migrations/20250222173756_add_message_id_to_send_logs/migration.sql
-prisma/migrations/20250222174535_add_campaign_locking/migration.sql
+prisma/migrations/*
 prisma/dev.db
 CDC.md
 pnpm-lock.yaml
-.vscode/settings.json
+.vscode/*
