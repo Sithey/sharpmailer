@@ -2,9 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
+type RouteContext = {
+  params: {
+    userId: string
+  }
+}
+
 export async function GET(
   request: NextRequest,
-  { params }: { params: { userId: string } }
+  { params }: RouteContext
 ) {
   try {
     const session = await auth();
