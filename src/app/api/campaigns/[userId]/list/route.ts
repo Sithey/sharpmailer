@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 
 export async function GET(
   request: Request,
-  { params }: { params: Promise<{ userId: string }> }
+  { params }: { params: { userId: string } }
 ): Promise<NextResponse> {
   try {
     const session = await auth();
@@ -16,7 +16,7 @@ export async function GET(
       );
     }
 
-    const { userId } = await params;
+    const { userId } = params;
 
     const campaigns = await prisma.campaign.findMany({
       where: {
