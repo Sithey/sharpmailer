@@ -50,9 +50,7 @@ interface MassMailOptions {
 interface MailResult {
   email: string;
   success: boolean;
-  messageId?: string;
   error?: string;
-  sentAt?: Date;
 }
 
 function replaceTemplateVariables(text: string, variables: Record<string, string>): string {
