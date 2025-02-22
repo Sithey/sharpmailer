@@ -22,7 +22,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import SMTPList from "./smtp";
 import { MailResult } from "@/interface/mail";
-import { sendCampaignEmails } from "@/lib/campaigns";
+import { sendCampaignEmails, getCampaignProgress } from "@/lib/campaigns";
 import { Loader2 } from "lucide-react";
 import SendProgress from "@/components/mail/send-progress";
 import TemplatePreview from "./template-preview";
@@ -197,12 +197,6 @@ interface SendProgressDetails {
   failureCount: number;
 }
 
-interface ProgressData {
-  type: string;
-  current: number;
-  success: number;
-  failure: number;
-}
 
 export default function MailEditor({
   user,
@@ -369,23 +363,20 @@ export default function MailEditor({
         successCount: 0,
         failureCount: 0,
       });
-      const eventSource = new EventSource(
-        `/api/campaigns/progress?campaignId=${selectedCampaign.id}`
-      );
-      eventSource.onmessage = (event: MessageEvent) => {
-        const data = JSON.parse(event.data) as ProgressData;
-        if (data.type === "progress") {
-          setSendProgress((prev) => ({
+
+      // Créer une intervalle pour vérifier la progression
+      const progressInterval = setInterval(async () => {
+        const progress = await getCampaignProgress(selectedCampaign.id);
+        if (progress.success && progress.stats) {
+          setSendProgress(prev => ({
             ...prev,
-            currentEmail: data.current,
-            successCount: data.success,
-            failureCount: data.failure,
+            currentEmail: progress.stats.current,
+            successCount: progress.stats.success,
+            failureCount: progress.stats.failure
           }));
         }
-      };
-      eventSource.onerror = () => {
-        eventSource.close();
-      };
+      }, 500);
+
       const result = await sendCampaignEmails(
         selectedCampaign.id,
         {
@@ -400,7 +391,9 @@ export default function MailEditor({
           html: text,
         }
       );
-      eventSource.close();
+
+      clearInterval(progressInterval);
+
       if (result.success && result.results) {
         setSendResults(result.results);
         const successCount = result.results.filter((r) => r.success).length;

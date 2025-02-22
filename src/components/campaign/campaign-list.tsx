@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import { Campaign, SMTP, Template, User, CampaignSendLog, Lead } from "@prisma/client";
 import { useToast } from "@/hooks/use-toast";
-import { addCampaign, deleteCampaign, sendCampaignEmails } from "@/lib/campaigns";
+import { addCampaign, deleteCampaign, sendCampaignEmails, listCampaigns, getCampaignProgress } from "@/lib/campaigns";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -128,24 +128,18 @@ export default function CampaignList({ user }: CampaignListProps) {
         failureCount: 0
       });
 
-      // Démarrer l'écoute des événements de progression
-      const eventSource = new EventSource(`/api/campaigns/progress?campaignId=${campaignId}`);
-      
-      eventSource.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        if (data.type === "progress") {
+      // Créer une intervalle pour vérifier la progression
+      const progressInterval = setInterval(async () => {
+        const progress = await getCampaignProgress(campaignId);
+        if (progress.success) {
           setSendProgress(prev => ({
             ...prev,
-            currentEmail: data.current,
-            successCount: data.success,
-            failureCount: data.failure
+            currentEmail: progress.stats?.current || prev.currentEmail,
+            successCount: progress.stats?.success || prev.successCount,
+            failureCount: progress.stats?.failure || prev.failureCount
           }));
         }
-      };
-
-      eventSource.onerror = () => {
-        eventSource.close();
-      };
+      }, 500);
 
       const result = await sendCampaignEmails(
         campaignId,
@@ -162,8 +156,7 @@ export default function CampaignList({ user }: CampaignListProps) {
         }
       );
 
-      // Fermer l'EventSource une fois l'envoi terminé
-      eventSource.close();
+      clearInterval(progressInterval);
 
       if (result.success && result.results) {
         setSendResults(result.results);
@@ -175,7 +168,6 @@ export default function CampaignList({ user }: CampaignListProps) {
           description: `Successfully sent ${successCount} emails, ${failureCount} failed.`,
         });
         
-        // Refresh campaigns to update logs
         await refreshCampaigns();
       } else {
         throw new Error(result.error || "Failed to send campaign emails");
@@ -197,23 +189,11 @@ export default function CampaignList({ user }: CampaignListProps) {
   const refreshCampaigns = async () => {
     setIsRefreshing(true);
     try {
-      const response = await fetch(`/api/campaigns/${id}/list`, {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      if (data.success) {
-        setCampaigns(data.campaigns);
+      const result = await listCampaigns(id);
+      if (result.success) {
+        setCampaigns(result.campaigns || []);
       } else {
-        console.error("Error refreshing campaigns:", data.error);
-        // En cas d'erreur, on garde les données actuelles
+        console.error("Error refreshing campaigns:", result.error);
         setCampaigns(prevCampaigns => prevCampaigns);
       }
     } catch (error) {

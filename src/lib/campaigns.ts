@@ -4,6 +4,7 @@ import { Campaign } from "@prisma/client";
 import { prisma } from "./prisma";
 import { sendMassMail } from "./send-mail";
 import type { MailResult } from "@/interface/mail";
+import { auth } from "@/lib/auth";
 
 interface CampaignResponse {
   success: boolean;
@@ -228,5 +229,78 @@ export async function clearCampaignLogs(campaignId: string): Promise<CampaignRes
   } catch (error) {
     console.error("Error clearing campaign logs:", error);
     return { success: false, error: "Failed to clear campaign logs" };
+  }
+}
+
+export async function listCampaigns(userId: string) {
+  try {
+    const session = await auth();
+
+    if (!session?.user?.email) {
+      return { success: false, error: "Not authenticated" };
+    }
+
+    const campaigns = await prisma.campaign.findMany({
+      where: { userId },
+      include: {
+        sendLogs: {
+          orderBy: { sentAt: "desc" },
+        },
+        leads: true,
+      },
+    });
+
+    return { success: true, campaigns };
+  } catch (error) {
+    console.error("Error fetching campaigns:", error);
+    return { success: false, error: "Failed to fetch campaigns" };
+  }
+}
+
+export async function getCampaignProgress(campaignId: string) {
+  try {
+    const session = await auth();
+
+    if (!session?.user?.email) {
+      return { success: false, error: "Not authenticated" };
+    }
+
+    const [campaign, sendLogs] = await Promise.all([
+      prisma.campaign.findUnique({
+        where: { id: campaignId },
+        select: { description: true },
+      }),
+      prisma.campaignSendLog.groupBy({
+        by: ["success"],
+        where: { campaignId },
+        _count: true,
+      }),
+    ]);
+
+    const successCount = sendLogs.find(log => log.success)?._count ?? 0;
+    const failureCount = sendLogs.find(log => !log.success)?._count ?? 0;
+
+    let current = 0;
+    let total = 0;
+
+    if (campaign?.description?.startsWith("Sending:")) {
+      const [, progress] = campaign.description.split(": ");
+      const [currentStr, totalStr] = progress.split("/").map(s => s.trim());
+      current = parseInt(currentStr);
+      total = parseInt(totalStr);
+    }
+
+    return { 
+      success: true, 
+      stats: {
+        current,
+        total,
+        success: successCount,
+        failure: failureCount,
+      }
+    };
+  } catch (error) {
+    console.error("Error getting campaign progress:", error);
+    return { success: false, error: "Failed to get campaign progress" };
   }
 }
