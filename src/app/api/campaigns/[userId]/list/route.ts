@@ -1,10 +1,10 @@
-import { NextResponse } from "next/server";
 import type { NextApiRequest } from 'next'
 
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { NextResponse } from 'next/server';
 
-export async function GET(request: NextApiRequest): Promise<NextResponse> {
+export default async function handler(request: NextApiRequest) {
   try {
     const session = await auth();
 
