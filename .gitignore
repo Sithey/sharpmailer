@@ -53,3 +53,4 @@ prisma/migrations/20250222174535_add_campaign_locking/migration.sql
 prisma/dev.db
 CDC.md
 pnpm-lock.yaml
+.vscode/settings.json
