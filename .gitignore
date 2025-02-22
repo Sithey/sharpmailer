@@ -43,6 +43,5 @@ prisma/migrations/*
 prisma/dev.db
 CDC.md
 pnpm-lock.yaml
-.vscode/*
-.vscode/settings.json
+
 .vscode/settings.json
