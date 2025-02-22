@@ -1,22 +1,27 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
+interface RouteParams {
+  params: {
+    userId: string
+  }
+}
+
 export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ userId: string }> }
-): Promise<NextResponse> {
+  { params }: RouteParams
+) {
   try {
     const session = await auth();
 
     if (!session?.user?.email) {
-      return new NextResponse(
-        JSON.stringify({ success: false, error: "Not authenticated" }),
+      return NextResponse.json(
+        { success: false, error: "Not authenticated" },
         { status: 401 }
       );
     }
 
-    const { userId } = await params;
+    const { userId } = params;
 
     const campaigns = await prisma.campaign.findMany({
       where: {
@@ -35,8 +40,8 @@ export async function GET(
     return NextResponse.json({ success: true, campaigns });
   } catch (error) {
     console.error("Error fetching campaigns:", error);
-    return new NextResponse(
-      JSON.stringify({ success: false, error: "Failed to fetch campaigns" }),
+    return NextResponse.json(
+      { success: false, error: "Failed to fetch campaigns" },
       { status: 500 }
     );
   }
