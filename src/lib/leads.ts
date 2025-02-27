@@ -82,9 +82,21 @@ export async function deleteLead(id: string): Promise<LeadResponse> {
 
 export async function importLeadsFromCSV(userId: string, leads: { email: string; variables?: Record<string, string> }[]): Promise<LeadsResponse> {
   try {
+    const existingLeads = await prisma.lead.findMany({
+      where: { userId },
+      select: { email: true }
+    });
+    
+    const existingEmails = new Set(existingLeads.map(lead => lead.email.toLowerCase()));
+    
+    const newLeads = leads.filter(lead => !existingEmails.has(lead.email.toLowerCase()));
+    
+    if (newLeads.length === 0) {
+      return { success: true, leads: [], error: "All leads already exist" };
+    }
+
     const createdLeads = await prisma.$transaction(
-      leads.map(lead => {
-        // Ensure variables is properly stringified when non-empty
+      newLeads.map(lead => {
         const variables = lead.variables && Object.keys(lead.variables).length > 0
           ? JSON.stringify(lead.variables)
           : null;

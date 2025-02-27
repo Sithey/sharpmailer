@@ -194,7 +194,7 @@ export async function sendMassMail({ campaignId, from, template }: MassMailOptio
       await updateProgress(i + 1, successCount, failureCount);
 
       // Pause entre les envois pour éviter la surcharge
-      await new Promise(resolve => setTimeout(resolve, 200));
+      await new Promise(resolve => setTimeout(resolve, 400));
     }
 
     return results;
