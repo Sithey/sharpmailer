@@ -1,39 +1,13 @@
 "use server";
 
-import nodemailer from "nodemailer";
-import type { Mail } from "@/interface/mail";
-import { decrypt } from "./crypto";
 import { prisma } from "./prisma";
+import { decrypt } from "./crypto";
+import nodemailer, { SendMailOptions } from "nodemailer";
+import { MailResult } from "@/interface/mail";
+import type { Lead } from "@prisma/client";
 
-export default async function sendMail({ from, to, template }: Mail) {
-
-    const transporter = nodemailer.createTransport({
-        host: from.host,
-        port: from.port,
-        secure: (from.port == 587 || from.port == 25) ? false : true, 
-        auth: {
-            user: from.user,
-            pass: decrypt(from.pass)
-        }
-    });
-
-    try {
-        const result = await transporter.sendMail({
-            from: process.env.EMAIL_FROM?.toLowerCase(),
-            to: to.toLowerCase(),
-            subject: template.subject,
-            html: template.html
-        });
-        return result;
-        
-    } catch (error) {
-        console.error("Error sending mail:", error);
-        throw error;
-    }
-}
-
-interface MassMailOptions {
-  campaignId: string;
+interface SendMailConfig {
+  campaignId?: string; // Rendre le campaignId optionnel
   from: {
     host: string;
     port: number;
@@ -45,173 +19,180 @@ interface MassMailOptions {
     subject: string;
     html: string;
   };
+  leads?: Lead[]; // Nouveau paramètre pour permettre l'envoi à des leads en mémoire
 }
 
-interface MailResult {
-  email: string;
-  success: boolean;
-  messageId?: string;
-  error?: string;
-  sentAt?: Date;
-}
-
-function replaceTemplateVariables(text: string, variables: Record<string, string>): string {
-  let result = text;
-  Object.entries(variables).forEach(([key, value]) => {
-    const regex = new RegExp(`{${key}}`, 'g');
-    result = result.replace(regex, value);
-  });
-  result = result.replace(/{[^}]+}/g, '');
-  return result;
-}
-
-export async function sendMassMail({ campaignId, from, template }: MassMailOptions): Promise<MailResult[]> {
-  const transporter = nodemailer.createTransport({
-    host: from.host,
-    port: from.port,
-    secure: from.port == 587 || from.port == 25 ? false : true,
-    auth: {
-      user: from.user,
-      pass: decrypt(from.pass)
-    },
-    pool: true,
-    maxConnections: 5,
-    maxMessages: Infinity,
-    logger: true,
-    debug: true
-  });
-
+// Fonction pour envoyer un email en masse (utilisant campaignId ou leads directement)
+export async function sendMassMail(config: SendMailConfig): Promise<MailResult[]> {
+  const { campaignId, from, template, leads: providedLeads } = config;
+  
   try {
-    // Vérifier et acquérir le verrou
-    const campaign = await prisma.campaign.findUnique({
-      where: { id: campaignId },
-      include: {
-        leads: true
+    let leads: Lead[] = [];
+    let campaign = null;
+
+    // Si un campaignId est fourni, on récupère la campagne et ses leads depuis la base de données
+    if (campaignId) {
+      campaign = await prisma.campaign.findUnique({
+        where: { id: campaignId },
+        include: { leads: true },
+      });
+
+      if (!campaign) {
+        throw new Error("Campaign not found");
       }
-    });
 
-    if (!campaign || !campaign.leads) {
-      throw new Error("Campaign not found or has no leads");
-    }
+      leads = campaign.leads;
 
-    // Vérifier si la campagne est déjà verrouillée
-    if (campaign.locked) {
-      if (campaign.lockedAt && new Date().getTime() - campaign.lockedAt.getTime() > 30 * 60 * 1000) {
-        // Si le verrou date de plus de 30 minutes, on le force
-        await prisma.campaign.update({
-          where: { id: campaignId },
-          data: { locked: false, lockedAt: null }
-        });
-      } else {
-        throw new Error("Campaign is currently locked. Another send operation might be in progress.");
-      }
-    }
-
-    // Acquérir le verrou
-    await prisma.campaign.update({
-      where: { id: campaignId },
-      data: { locked: true, lockedAt: new Date() }
-    });
-
-    const results: MailResult[] = [];
-    const totalLeads = campaign.leads.length;
-    let successCount = 0;
-    let failureCount = 0;
-
-    const updateProgress = async (current: number, success: number, failure: number) => {
+      // Marquer la campagne comme en cours d'envoi
       await prisma.campaign.update({
         where: { id: campaignId },
-        data: {
-          description: `Sending: ${current}/${totalLeads} (✓${success} ✕${failure})`
-        }
+        data: { 
+          locked: true,
+          description: `Sending: 0/${leads.length}` 
+        },
       });
-    };
+    } 
+    // Si des leads sont fournis directement, on les utilise
+    else if (providedLeads && providedLeads.length > 0) {
+      leads = providedLeads;
+    }
+    else {
+      throw new Error("Either campaignId or leads must be provided");
+    }
 
-    for (let i = 0; i < campaign.leads.length; i++) {
-      const lead = campaign.leads[i];
-      try {
-        // Extraire et parser les variables du lead
-        const variables = lead.variables ? JSON.parse(lead.variables as string) : {};
-        
-        // Personnaliser le sujet et le contenu
-        const personalizedSubject = replaceTemplateVariables(template.subject, variables);
-        const personalizedHtml = replaceTemplateVariables(template.html, variables);
+    // Créer un transporteur SMTP
+    const transporter = nodemailer.createTransport({
+      host: from.host,
+      port: from.port,
+      secure: from.port === 587 || from.port === 25 ? false : from.secure,
+      auth: {
+        user: from.user,
+        pass: decrypt(from.pass),
+      },
+      tls: {
+        rejectUnauthorized: false,
+      },
+    });
 
-        // Envoyer l'email avec un retour détaillé
-        const info = await transporter.sendMail({
-          from: from.user,
-          to: lead.email.toLocaleLowerCase(),
-          subject: personalizedSubject,
-          html: personalizedHtml,
-          headers: {
-            'X-Campaign-ID': campaignId,
-            'X-Lead-ID': lead.id
-          }
-        });
+    // Vérification du transporteur
+    await transporter.verify();
 
-        successCount++;
-        results.push({
-          email: lead.email,
-          success: true,
-          messageId: info.messageId,
-          sentAt: new Date()
-        });
+    // Résultats d'envoi
+    const results: MailResult[] = [];
+    let successCount = 0;
+    let errorCount = 0;
 
-        // Enregistrer le log d'envoi réussi
-        await prisma.campaignSendLog.create({
-          data: {
-            campaignId,
-            leadEmail: lead.email,
-            success: true,
-            messageId: info.messageId
-          }
-        });
+    // Envoyer les emails un par un
+    for (let i = 0; i < leads.length; i++) {
+      const lead = leads[i];
 
-      } catch (error) {
-        failureCount++;
-        const errorMessage = error instanceof Error ? error.message : "Unknown error";
-        console.error(`Error sending mail to ${lead.email}:`, errorMessage);
-        
-        results.push({
-          email: lead.email,
-          success: false,
-          error: errorMessage,
-          sentAt: new Date()
-        });
-
-        // Enregistrer le log d'envoi échoué
-        await prisma.campaignSendLog.create({
-          data: {
-            campaignId,
-            leadEmail: lead.email,
-            success: false,
-            error: errorMessage
-          }
+      if (campaignId) {
+        // Mise à jour de la progression pour la campagne (seulement si campaignId est fourni)
+        await prisma.campaign.update({
+          where: { id: campaignId },
+          data: { description: `Sending: ${i+1}/${leads.length}` },
         });
       }
 
-      // Mettre à jour la progression avec les succès/échecs
-      await updateProgress(i + 1, successCount, failureCount);
+      try {
+        // Préparation du contenu de l'email avec variables personnalisées
+        let personalizedHtml = template.html;
+        let personalizedSubject = template.subject;
+        
+        // Traitement des variables avec le bon typage
+        let leadVariables: Record<string, string> = {};
+        
+        // Si les variables sont une chaîne JSON, on les parse
+        if (typeof lead.variables === 'string') {
+          try {
+            const parsed = JSON.parse(lead.variables);
+            if (typeof parsed === 'object' && parsed !== null) {
+              leadVariables = parsed;
+            }
+          } catch (e) {
+            console.error('Error parsing variables:', e);
+          }
+        } else if (typeof lead.variables === 'object' && lead.variables !== null) {
+          leadVariables = lead.variables as Record<string, string>;
+        }
+        
+        // Remplacer les variables dans le sujet et le corps du mail
+        Object.entries(leadVariables).forEach(([key, value]) => {
+          // Remplacer le format {{variable}}
+          const regexDouble = new RegExp(`{{\\s*${key}\\s*}}`, 'gi');
+          personalizedHtml = personalizedHtml.replace(regexDouble, String(value));
+          personalizedSubject = personalizedSubject.replace(regexDouble, String(value));
+          
+          // Remplacer le format {variable}
+          const regexSingle = new RegExp(`{\\s*${key}\\s*}`, 'gi');
+          personalizedHtml = personalizedHtml.replace(regexSingle, String(value));
+          personalizedSubject = personalizedSubject.replace(regexSingle, String(value));
+        });
+        
+        // Remplacer la variable email dans les deux formats
+        personalizedHtml = personalizedHtml
+          .replace(/{{(\s*)email(\s*)}}/gi, lead.email)
+          .replace(/{(\s*)email(\s*)}/gi, lead.email);
+        personalizedSubject = personalizedSubject
+          .replace(/{{(\s*)email(\s*)}}/gi, lead.email)
+          .replace(/{(\s*)email(\s*)}/gi, lead.email);
 
-      // Pause entre les envois pour éviter la surcharge
-      await new Promise(resolve => setTimeout(resolve, 400));
+        // Options pour l'envoi d'email
+        const mailOptions: SendMailOptions = {
+          from: from.user,
+          to: lead.email,
+          subject: personalizedSubject,
+          html: personalizedHtml,
+        };
+        
+        // Envoyer l'email
+        const info = await transporter.sendMail(mailOptions);
+        
+        const result: MailResult = {
+          email: lead.email,
+          success: true,
+          messageId: info.messageId || "",
+        };
+        
+        results.push(result);
+        successCount++;
+      } catch (error) {
+        console.error(`Failed to send email to ${lead.email}:`, error);
+        
+        const result: MailResult = {
+          email: lead.email,
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+        
+        results.push(result);
+        errorCount++;
+      }
+    }
+
+    // Si une campagne était utilisée, on la déverrouille une fois terminée
+    if (campaignId) {
+      await prisma.campaign.update({
+        where: { id: campaignId },
+        data: { 
+          locked: false,
+          description: `Sent: ${successCount} success, ${errorCount} errors` 
+        },
+      });
     }
 
     return results;
-
   } catch (error) {
-    console.error("Error in mass mailing:", error);
+    console.error("Error in sendMassMail:", error);
+    
+    // Déverrouiller la campagne en cas d'erreur si une campaignId était fournie
+    if (campaignId) {
+      await prisma.campaign.update({
+        where: { id: campaignId },
+        data: { locked: false, description: "Failed to send" },
+      });
+    }
+    
     throw error;
-  } finally {
-    // Libérer le verrou et mettre à jour la description
-    await prisma.campaign.update({
-      where: { id: campaignId },
-      data: {
-        locked: false,
-        lockedAt: null,
-        description: `Last send completed at ${new Date().toLocaleString()}`
-      }
-    });
-    transporter.close();
   }
 }

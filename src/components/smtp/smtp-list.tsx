@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { User, SMTP } from "@prisma/client";
 import { useToast } from "@/hooks/use-toast";
-import { addSMTP, deleteSMTP, fetchSMTPs } from "@/lib/smtp";
+import { addSMTP, deleteSMTP } from "@/lib/smtp";
+import { fetchSMTPs as fetchSMTPsAPI } from "@/lib/client-api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -29,7 +30,7 @@ export default function SMTPList({ user }: SMTPListProps) {
     const { toast } = useToast();
 
     const refreshSMTPs = async () => {
-        const result = await fetchSMTPs(user.id);
+        const result = await fetchSMTPsAPI(user.id);
         if (result.success && result.smtps) {
             setSMTPs(result.smtps);
         } else {

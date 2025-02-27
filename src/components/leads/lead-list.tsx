@@ -3,7 +3,8 @@
 import React, { useState } from "react";
 import { Campaign, Lead, User } from "@prisma/client";
 import { useToast } from "@/hooks/use-toast";
-import { addLead, deleteLead, fetchLeads, importLeadsFromCSV, updateLeadCampaigns, updateLeadVariables } from "@/lib/leads";
+import { addLead, deleteLead, importLeadsFromCSV, updateLeadCampaigns, updateLeadVariables } from "@/lib/leads";
+import { fetchLeads as fetchLeadsAPI } from "@/lib/client-api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -28,7 +29,7 @@ export default function LeadList({ user }: { user: User & { leads: (Lead & { cam
   const [isEditing, setIsEditing] = useState<boolean>(false);
 
   const refreshLeads = async () => {
-    const result = await fetchLeads(id);
+    const result = await fetchLeadsAPI(id);
     if (result.success && result.leads) {
       setLeads(result.leads as (Lead & { campaigns: Campaign[] })[]);
     } else {

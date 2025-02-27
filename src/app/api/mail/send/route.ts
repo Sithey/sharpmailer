@@ -1,30 +1,45 @@
-import { NextResponse, NextRequest } from 'next/server';
-import sendMail from '@/lib/send-mail';
-import { Mail, Template } from '@/interface/mail';
+import { NextRequest, NextResponse } from 'next/server';
+import { auth } from '@/lib/auth';
+import { sendDirectEmails } from '@/lib/campaigns';
 
 export async function POST(request: NextRequest) {
   try {
-    const body: Mail = await request.json();
-    const template: Template = body.template;
+    const session = await auth();
     
-    if (!template.subject || !template.html) {
+    if (!session?.user?.email) {
+      return NextResponse.json({ success: false, error: "Not authenticated" }, { status: 401 });
+    }
+    
+    const { smtpConfig, template, leads } = await request.json();
+    
+    if (!smtpConfig || !template || !leads || !Array.isArray(leads) || leads.length === 0) {
       return NextResponse.json(
-        { success: false, error: 'Subject and text are required' },
-        { status: 400, statusText: 'Bad Request' }
+        { 
+          success: false, 
+          error: "Invalid request. Required fields: smtpConfig, template, leads" 
+        }, 
+        { status: 400 }
       );
     }
-
-    await sendMail(body);
-    return NextResponse.json(
-      { success: true, message: 'Email sent successfully' },
-      { status: 200, statusText: 'OK' }
-    );
     
+    const result = await sendDirectEmails(smtpConfig, template, leads);
+    
+    if (result.success) {
+      return NextResponse.json({ 
+        success: true, 
+        results: result.results 
+      });
+    } else {
+      return NextResponse.json(
+        { success: false, error: result.error || "Failed to send emails" },
+        { status: 500 }
+      );
+    }
   } catch (error) {
-    console.error('Error sending email:', error);
+    console.error("Error sending direct emails:", error);
     return NextResponse.json(
-      { success: false, error: 'Failed to send email' },
-      { status: 500, statusText: 'Internal Server Error' }
+      { success: false, error: "Failed to send emails" },
+      { status: 500 }
     );
   }
 }

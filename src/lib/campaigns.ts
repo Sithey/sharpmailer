@@ -304,3 +304,68 @@ export async function getCampaignProgress(campaignId: string) {
     return { success: false, error: "Failed to get campaign progress" };
   }
 }
+
+// Nouvelle fonction pour envoyer directement à des leads temporaires
+interface ImportedLead {
+  email: string;
+  variables?: Record<string, string>;
+}
+
+export async function sendDirectEmails(
+  smtpConfig: { 
+    host: string; 
+    port: number; 
+    username: string; 
+    password: string; 
+    secure: boolean;
+  },
+  template: {
+    subject: string;
+    html: string;
+  },
+  leads: ImportedLead[]
+): Promise<SendCampaignResponse> {
+  try {
+    const session = await auth();
+
+    if (!session?.user?.email) {
+      return { success: false, error: "Not authenticated" };
+    }
+    
+    // Transformer les leads avec le bon format de variables
+    const formattedLeads = leads.map(lead => ({
+      id: Math.random().toString(36).substring(2, 11),
+      email: lead.email,
+      variables: lead.variables ? JSON.stringify(lead.variables) : "{}",
+      userId: '',
+      createdAt: new Date(),
+      updatedAt: new Date()
+    }));
+
+    const results = await sendMassMail({
+      from: {
+        host: smtpConfig.host,
+        port: smtpConfig.port,
+        user: smtpConfig.username,
+        pass: smtpConfig.password,
+        secure: smtpConfig.secure
+      },
+      template: {
+        subject: template.subject,
+        html: template.html
+      },
+      leads: formattedLeads
+    });
+
+    return {
+      success: true,
+      results
+    };
+  } catch (error) {
+    console.error("Error sending direct emails:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to send emails"
+    };
+  }
+}

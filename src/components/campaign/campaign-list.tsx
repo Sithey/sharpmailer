@@ -3,7 +3,8 @@
 import React, { useState } from "react";
 import { Campaign, SMTP, Template, User, CampaignSendLog, Lead } from "@prisma/client";
 import { useToast } from "@/hooks/use-toast";
-import { addCampaign, deleteCampaign, sendCampaignEmails, listCampaigns, getCampaignProgress } from "@/lib/campaigns";
+import { addCampaign, deleteCampaign, sendCampaignEmails } from "@/lib/campaigns";
+import { listCampaigns as listCampaignsAPI, getCampaignProgress as getCampaignProgressAPI } from "@/lib/client-api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -130,7 +131,7 @@ export default function CampaignList({ user }: CampaignListProps) {
 
       // Créer une intervalle pour vérifier la progression
       const progressInterval = setInterval(async () => {
-        const progress = await getCampaignProgress(campaignId);
+        const progress = await getCampaignProgressAPI(campaignId);
         if (progress.success) {
           setSendProgress(prev => ({
             ...prev,
@@ -189,7 +190,7 @@ export default function CampaignList({ user }: CampaignListProps) {
   const refreshCampaigns = async () => {
     setIsRefreshing(true);
     try {
-      const result = await listCampaigns(id);
+      const result = await listCampaignsAPI(id);
       if (result.success) {
         setCampaigns(result.campaigns || []);
       } else {
