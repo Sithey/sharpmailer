@@ -19,8 +19,8 @@ export default async function sendMail({ from, to, template }: Mail) {
 
     try {
         const result = await transporter.sendMail({
-            from: process.env.EMAIL_FROM,
-            to,
+            from: process.env.EMAIL_FROM?.toLowerCase(),
+            to: to.toLowerCase(),
             subject: template.subject,
             html: template.html
         });
@@ -139,8 +139,8 @@ export async function sendMassMail({ campaignId, from, template }: MassMailOptio
 
         // Envoyer l'email avec un retour détaillé
         const info = await transporter.sendMail({
-          from: process.env.EMAIL_FROM || from.user,
-          to: lead.email,
+          from: from.user,
+          to: lead.email.toLocaleLowerCase(),
           subject: personalizedSubject,
           html: personalizedHtml,
           headers: {
