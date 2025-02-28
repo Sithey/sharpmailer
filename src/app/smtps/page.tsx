@@ -1,9 +1,12 @@
+import { Suspense } from 'react';
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { auth } from '@/lib/auth';
 import SMTPList from "@/components/smtp/smtp-list";
+import SMTPListSkeleton from "@/components/smtp/smtp-list-skeleton";
 
-export default async function SMTPsPage() {
+// Composant de contenu qui fait le fetch des données
+async function SMTPsContent() {
     const session = await auth();
 
     if (!session?.user?.email) {
@@ -23,9 +26,22 @@ export default async function SMTPsPage() {
         redirect('/');
     }
 
+    return <SMTPList user={user} />;
+}
+
+export default async function SMTPsPage() {
+    // Vérification simple d'authentification
+    const session = await auth();
+    
+    if (!session?.user?.email) {
+        redirect('/');
+    }
+
     return (
         <div>
-            <SMTPList user={user} />
+            <Suspense fallback={<SMTPListSkeleton />}>
+                <SMTPsContent />
+            </Suspense>
         </div>
     );
 }

@@ -1,9 +1,12 @@
+import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
 import { auth } from '@/lib/auth';
 import Quill from '@/components/mail/quill';
+import QuillSkeleton from '@/components/mail/quill-skeleton';
 import { prisma } from '@/lib/prisma';
 
-export default async function Home() {
+// Composant de contenu qui fait le fetch des données
+async function HomeContent() {
   const session = await auth();
 
   if (!session || !session.user?.email) {
@@ -29,9 +32,22 @@ export default async function Home() {
     redirect('/api/auth/signin');
   }
 
+  return <Quill user={user} />;
+}
+
+export default async function Home() {
+  // Vérification de l'authentification sans données complètes
+  const session = await auth();
+  
+  if (!session || !session.user?.email) {
+    redirect('/api/auth/signin');
+  }
+
   return (
     <div>
-      <Quill user={user} />
+      <Suspense fallback={<QuillSkeleton />}>
+        <HomeContent />
+      </Suspense>
     </div>
   );
 }

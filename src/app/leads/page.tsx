@@ -1,9 +1,12 @@
+import { Suspense } from 'react';
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { auth } from '@/lib/auth';
 import LeadList from "@/components/leads/lead-list";
+import LeadListSkeleton from "@/components/leads/lead-list-skeleton";
 
-export default async function LeadsPage() {
+// Composant de contenu qui fait le fetch des données
+async function LeadsContent() {
     const session = await auth();
 
     if (!session?.user?.email) {
@@ -28,9 +31,22 @@ export default async function LeadsPage() {
         redirect('/');
     }
 
+    return <LeadList user={user} />;
+}
+
+export default async function LeadsPage() {
+    // Vérification simple d'authentification
+    const session = await auth();
+    
+    if (!session?.user?.email) {
+        redirect('/');
+    }
+
     return (
         <div className="container mx-auto py-6">
-            <LeadList user={user} />
+            <Suspense fallback={<LeadListSkeleton />}>
+                <LeadsContent />
+            </Suspense>
         </div>
     );
 }
